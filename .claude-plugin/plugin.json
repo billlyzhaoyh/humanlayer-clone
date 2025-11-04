@@ -1,0 +1,19 @@
+{
+  "name": "humanlayer-clone",
+  "version": "1.0.0",
+  "description": "Research, plan, and implement workflow commands with specialized sub-agents",
+  "author": {
+    "name": "HumanLayer Clone Contributors"
+  },
+  "homepage": "https://github.com/billyzhaoyh/humanlayer-clone",
+  "license": "Apache-2.0",
+  "keywords": [
+    "research",
+    "planning",
+    "workflow",
+    "agents",
+    "documentation"
+  ],
+  "commands": "./commands/*.md",
+  "agents": "./agents/*.md"
+}
