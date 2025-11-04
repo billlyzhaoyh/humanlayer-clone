@@ -13,5 +13,6 @@ Thumbs.db
 *.tmp
 *.bak
 
-# Thoughts directory (local workspace)
-thoughts/
+# Thoughts directory is now committed (contains research/plans linked to Linear tickets)
+# Node modules
+node_modules/
