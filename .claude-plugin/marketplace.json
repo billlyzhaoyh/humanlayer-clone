@@ -1,0 +1,13 @@
+{
+  "name": "humanlayer-clone",
+  "owner": {
+    "name": "HumanLayer Clone Contributors"
+  },
+  "plugins": [
+    {
+      "name": "humanlayer-clone",
+      "source": "./",
+      "description": "Research, plan, and implement workflow commands with specialized sub-agents"
+    }
+  ]
+}
