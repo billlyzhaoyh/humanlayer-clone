@@ -67,10 +67,13 @@ async function listIssues(options) {
       }
     }
 
+    // Convert limit to integer (GraphQL requires Int type, not String)
+    const limitInt = typeof limit === 'string' ? parseInt(limit, 10) : limit;
+
     // Fetch issues
     const issues = await linear.issues({
       filter,
-      first: limit,
+      first: limitInt,
       orderBy: 'updatedAt'
     });
 
@@ -231,14 +234,34 @@ async function addComment(issueId, commentBody) {
       process.exit(1);
     }
 
-    await linear.commentCreate({
-      issueId: issue.id,
-      body: commentBody
+    // Use Linear SDK v2 mutation helper
+    // The SDK provides mutation helpers through the client
+    const result = await linear.client.request(`
+      mutation CommentCreate($input: CommentCreateInput!) {
+        commentCreate(input: $input) {
+          success
+          comment {
+            id
+          }
+        }
+      }
+    `, {
+      input: {
+        issueId: issue.id,
+        body: commentBody
+      }
     });
+
+    if (!result.commentCreate?.success) {
+      throw new Error('Failed to create comment');
+    }
 
     console.log(`✓ Added comment to ${issueId}`);
   } catch (error) {
     console.error('Error adding comment:', error.message);
+    if (error.response) {
+      console.error('Response:', JSON.stringify(error.response, null, 2));
+    }
     process.exit(1);
   }
 }
@@ -255,15 +278,39 @@ async function addLink(issueId, url, title = null) {
       process.exit(1);
     }
 
-    await linear.attachmentLinkURL({
-      issueId: issue.id,
-      url,
-      title: title || url
-    });
+    const mutation = `
+      mutation AttachmentCreate($input: AttachmentCreateInput!) {
+        attachmentCreate(input: $input) {
+          success
+          attachment {
+            id
+            url
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      input: {
+        issueId: issue.id,
+        url,
+        title: title || url,
+        subtitle: 'GitHub Pull Request'
+      }
+    };
+
+    const result = await linear.client.request(mutation, variables);
+
+    if (!result.attachmentCreate?.success) {
+      throw new Error('Failed to add link');
+    }
 
     console.log(`✓ Added link to ${issueId}: ${url}`);
   } catch (error) {
     console.error('Error adding link:', error.message);
+    if (error.response) {
+      console.error('Response:', JSON.stringify(error.response, null, 2));
+    }
     process.exit(1);
   }
 }
@@ -373,14 +420,14 @@ async function setupWorkflow(options = {}) {
     // Define required workflow states in order
     const requiredStates = [
       // Research phase
-      { name: 'Research Needed', type: 'backlog', color: '#e2e2e2', description: 'Ticket needs codebase research before planning' },
-      { name: 'Research In Progress', type: 'started', color: '#f2c94c', description: 'Research workflow is running' },
-      { name: 'Research In Review', type: 'started', color: '#f2994a', description: 'Research complete, awaiting approval' },
+      { name: 'Research Needed', type: 'unstarted', color: '#e2e2e2', description: 'Ticket needs codebase research before planning' },
+      { name: 'Research in Progress', type: 'started', color: '#f2c94c', description: 'Research workflow is running' },
+      { name: 'Research in Review', type: 'started', color: '#f2994a', description: 'Research complete, awaiting approval' },
 
       // Planning phase
       { name: 'Ready for Plan', type: 'unstarted', color: '#5e6ad2', description: 'Research approved, ready for implementation planning' },
-      { name: 'Plan In Progress', type: 'started', color: '#26b5ce', description: 'Planning workflow is running' },
-      { name: 'Plan In Review', type: 'started', color: '#0f83ab', description: 'Plan complete, awaiting approval' },
+      { name: 'Plan in Progress', type: 'started', color: '#26b5ce', description: 'Planning workflow is running' },
+      { name: 'Plan in Review', type: 'started', color: '#0f83ab', description: 'Plan complete, awaiting approval' },
 
       // Implementation phase
       { name: 'Ready for Dev', type: 'unstarted', color: '#4ea7fc', description: 'Plan approved, ready for implementation' },

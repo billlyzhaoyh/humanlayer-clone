@@ -1,0 +1,95 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Setup Claude Code
+        env:
+          Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
+        run: |
+          mkdir -p ~/.claude
+          cat > ~/.claude/settings.json << EOF
+          {
+            "env": {
+              "ANTHROPIC_AUTH_TOKEN": "$Z_AI_API_KEY",
+              "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+              "API_TIMEOUT_MS": "3000000",
+              "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
+            }
+          }
+          EOF
+
+      - name: Run Claude Code Review
+        id: claude-review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROMPT=$(cat <<EOF
+          REPO: ${{ github.repository }}
+          PR NUMBER: ${{ github.event.pull_request.number }}
+
+          Please review this pull request and provide feedback on:
+          - Code quality and best practices
+          - Potential bugs or issues
+          - Performance considerations
+          - Security concerns
+          - Test coverage
+          - Architecture and design patterns
+
+          Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+          IMPORTANT: Post your review in TWO ways:
+
+          1. **General Summary Comment**: Use \`gh pr comment ${{ github.event.pull_request.number }} --body "..."\` to post an overall review summary with key findings and recommendations.
+
+          2. **Inline Comments** (for specific issues): Use \`gh api\` to post line-specific comments on code that needs attention:
+             \`\`\`bash
+             gh api --method POST /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments \\
+               -f body="Your specific feedback here" \\
+               -f commit_id="\$(gh api /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }} --jq '.head.sha')" \\
+               -f path="path/to/file.py" \\
+               -F line=10 \\
+               -f side="RIGHT"
+             \`\`\`
+
+          For large PRs, focus on the most critical issues and important files. Skip generated files, lock files, and vendor directories.
+          EOF
+          )
+          claude -p "$PROMPT" \
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr list:*),Bash(gh api:*)" \
+            --permission-mode acceptEdits

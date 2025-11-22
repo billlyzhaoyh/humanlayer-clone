@@ -12,8 +12,8 @@ I'll help you set up your Linear workspace with the workflow states required for
 This command will:
 
 1. **Create Workflow States** - Adds 9 required states to your Linear team:
-   - Research phase: Research Needed, Research In Progress, Research In Review
-   - Planning phase: Ready for Plan, Plan In Progress, Plan In Review
+   - Research phase: Research Needed, Research in Progress, Research in Review
+   - Planning phase: Ready for Plan, Plan in Progress, Plan in Review
    - Implementation phase: Ready for Dev, In Dev, Code Review
 
 2. **Configure Colors & Types** - Each state gets appropriate colors and types (backlog, unstarted, started)
@@ -130,9 +130,9 @@ Your Linear workflow will now follow this progression:
 └─────────────────┘
 Research Needed
       ↓ (automated)
-Research In Progress
+Research in Progress
       ↓ (automated)
-Research In Review
+Research in Review
       ↓ (manual approval)
 
 ┌─────────────────┐
@@ -140,9 +140,9 @@ Research In Review
 └─────────────────┘
 Ready for Plan
       ↓ (automated)
-Plan In Progress
+Plan in Progress
       ↓ (automated)
-Plan In Review
+Plan in Review
       ↓ (manual approval)
 
 ┌──────────────────────┐
@@ -160,8 +160,8 @@ Done
 **Automated transitions** are handled by GitHub Actions workflows.
 
 **Manual gates** require human review:
-- Research In Review → Ready for Plan (approve research quality)
-- Plan In Review → Ready for Dev (approve implementation plan)
+- Research in Review → Ready for Plan (approve research quality)
+- Plan in Review → Ready for Dev (approve implementation plan)
 
 ## Troubleshooting
 

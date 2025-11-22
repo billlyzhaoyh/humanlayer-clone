@@ -1,0 +1,305 @@
+name: Linear Research Tickets
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_tickets:
+        description: 'Number of tickets to process'
+        required: false
+        default: '10'
+        type: string
+
+jobs:
+  fetch-tickets:
+    name: Fetch tickets for research
+    runs-on: ubuntu-latest
+    outputs:
+      tickets: ${{ steps.get-tickets.outputs.tickets }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --prefix scripts
+
+      - name: Fetch tickets
+        id: get-tickets
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          # Get tickets in "Research Needed" status assigned to "Yanhong Zhao"
+          TICKETS=$(node scripts/linear-helper.mjs list-issues \
+            --status "Research Needed" \
+            --assignee "Yanhong Zhao" \
+            --limit "${{ github.event.inputs.num_tickets }}")
+
+          # Extract just the IDs for matrix strategy
+          TICKET_IDS=$(echo "$TICKETS" | jq -r '.[].id')
+
+          if [ -z "$TICKET_IDS" ]; then
+            echo "No tickets found in 'Research Needed' status"
+            echo "tickets=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Format as JSON array for matrix
+          MATRIX_JSON=$(echo "$TICKET_IDS" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "tickets=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+          echo "Found tickets: $MATRIX_JSON"
+
+  research-ticket:
+    name: Research ticket ${{ matrix.ticket_id }}
+    needs: fetch-tickets
+    if: needs.fetch-tickets.outputs.tickets != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      matrix:
+        ticket_id: ${{ fromJson(needs.fetch-tickets.outputs.tickets) }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for branch operations
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --prefix scripts
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Setup Claude Code
+        env:
+          Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
+        run: |
+          mkdir -p ~/.claude
+          cat > ~/.claude/settings.json << EOF
+          {
+            "env": {
+              "ANTHROPIC_AUTH_TOKEN": "$Z_AI_API_KEY",
+              "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+              "API_TIMEOUT_MS": "3000000",
+              "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1
+            }
+          }
+          EOF
+
+      - name: Install human-layer-clone plugin
+        run: |
+          claude /plugin marketplace add billlyzhaoyh/humanlayer-clone
+          claude /plugin install humanlayer-clone@billlyzhaoyh
+
+      - name: Update ticket status to "Research in Progress"
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/linear-helper.mjs update-status \
+            "${{ matrix.ticket_id }}" \
+            "Research in Progress"
+
+      - name: Get ticket details
+        id: ticket-info
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          # Get ticket details in text format
+          TICKET_INFO=$(node scripts/linear-helper.mjs get-issue \
+            "${{ matrix.ticket_id }}" \
+            --output text)
+
+          # Save to file for passing to Claude
+          echo "$TICKET_INFO" > ticket-details.txt
+
+          # Also get branch name if exists and save full JSON for PR
+          TICKET_JSON=$(node scripts/linear-helper.mjs get-issue \
+            "${{ matrix.ticket_id }}" \
+            --output json)
+
+          # Save ticket JSON for PR description
+          echo "$TICKET_JSON" | jq -r '.' > ticket-details.json
+
+          BRANCH_NAME=$(echo "$TICKET_JSON" | jq -r '.branchName // ""')
+
+          # Generate branch name if not set: research/KIN-5 format
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="research/${{ matrix.ticket_id }}"
+          else
+            # Ensure branch name starts with research/ prefix
+            if [[ ! "$BRANCH_NAME" =~ ^research/ ]]; then
+              BRANCH_NAME="research/$BRANCH_NAME"
+            fi
+          fi
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          echo "Ticket details saved to ticket-details.txt"
+
+      - name: Download ticket images
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          mkdir -p thoughts/shared/images
+          node scripts/linear-helper.mjs download-images \
+            "${{ matrix.ticket_id }}" \
+            --output-dir thoughts/shared/images || echo "No images to download"
+
+      - name: Create research directory structure
+        run: |
+          # Create all necessary directories with proper permissions
+          mkdir -p thoughts/shared/research
+          mkdir -p thoughts/shared/plans
+          mkdir -p thoughts/shared/images
+          # Ensure directories are writable
+          chmod -R 755 thoughts/shared
+
+      - name: Run research command
+        id: research
+        run: |
+          # Prepare research prompt
+          RESEARCH_PROMPT="Research Linear ticket ${{ matrix.ticket_id }}:
+
+          $(cat ticket-details.txt)
+
+          Please conduct deep codebase research to understand:
+          1. Current implementation relevant to this ticket
+          2. Related components and dependencies
+          3. Existing patterns we should follow
+          4. Technical context needed for planning
+
+          Create research document: thoughts/shared/research/$(date +%Y-%m-%d)-${{ matrix.ticket_id }}-$(echo '${{ matrix.ticket_id }}' | tr '[:upper:]' '[:lower:]').md"
+
+          # Run Claude Code with /research command
+          echo "$RESEARCH_PROMPT" | claude /humanlayer-clone:research \
+            --permission-mode acceptEdits || {
+            echo "Research command failed"
+            exit 1
+          }
+
+          # Find the created research document
+          RESEARCH_DOC=$(find thoughts/shared/research -name "*${{ matrix.ticket_id }}*" -type f | head -1)
+          echo "research_doc=$RESEARCH_DOC" >> $GITHUB_OUTPUT
+
+      - name: Prepare PR description
+        id: pr-description
+        run: |
+          # Get ticket details for PR description
+          TICKET_TITLE=$(cat ticket-details.json | jq -r '.title')
+          TICKET_URL=$(cat ticket-details.json | jq -r '.url')
+          RESEARCH_DOC="${{ steps.research.outputs.research_doc }}"
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          BRANCH="${{ steps.ticket-info.outputs.branch_name }}"
+
+          # Create PR title and description
+          PR_TITLE="[${{ matrix.ticket_id }}] Research: $TICKET_TITLE"
+          PR_BODY="## Linear Ticket: ${{ matrix.ticket_id }}
+
+          **Title**: $TICKET_TITLE
+          **Link**: $TICKET_URL
+
+          ## Research Document
+
+          This PR contains research findings for the ticket.
+          Research document: [$RESEARCH_DOC]($REPO_URL/blob/$BRANCH/$RESEARCH_DOC)
+
+          ## Review
+
+          Please review the research findings and move the ticket to 'Ready for Plan' when approved.
+
+          ---
+          🤖 Auto-generated by LinearLayer workflow"
+
+          # Save to files for use in PR creation
+          echo "$PR_BODY" > pr-body.txt
+          echo "$PR_TITLE" > pr-title.txt
+          echo "pr_title=$PR_TITLE" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          commit-message: "Research for ${{ matrix.ticket_id }}"
+          committer: LinearLayer Bot <linearbot@github.actions>
+          author: ${{ github.actor }} <${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com>
+          branch: ${{ steps.ticket-info.outputs.branch_name }}
+          title: ${{ steps.pr-description.outputs.pr_title }}
+          body-path: pr-body.txt
+          add-paths: |
+            thoughts/shared/research/*.md
+            thoughts/shared/images/
+
+      - name: Reinstall helper dependencies
+        if: steps.create-pr.outputs.pull-request-operation == 'created' || steps.create-pr.outputs.pull-request-operation == 'updated'
+        run: npm install --prefix scripts
+
+      - name: Update ticket status to "Research in Review"
+        if: steps.create-pr.outputs.pull-request-operation == 'created' || steps.create-pr.outputs.pull-request-operation == 'updated'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/linear-helper.mjs update-status \
+            "${{ matrix.ticket_id }}" \
+            "Research in Review"
+
+      - name: Add PR link to Linear ticket
+        if: steps.create-pr.outputs.pull-request-operation == 'created' || steps.create-pr.outputs.pull-request-operation == 'updated'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          PR_URL="${{ steps.create-pr.outputs.pull-request-url }}"
+
+          node scripts/linear-helper.mjs add-link \
+            "${{ matrix.ticket_id }}" \
+            "$PR_URL" \
+            --title "Research PR"
+
+      - name: Add comment with research link
+        if: steps.create-pr.outputs.pull-request-operation == 'created' || steps.create-pr.outputs.pull-request-operation == 'updated'
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          RESEARCH_DOC="${{ steps.research.outputs.research_doc }}"
+          PR_URL="${{ steps.create-pr.outputs.pull-request-url }}"
+          BRANCH="${{ steps.create-pr.outputs.pull-request-branch }}"
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+
+          COMMENT="✅ Research completed successfully!
+
+          🔀 Pull Request: $PR_URL
+          📄 Research document: [$RESEARCH_DOC]($REPO_URL/blob/$BRANCH/$RESEARCH_DOC)
+
+          Status updated to 'Research in Review'. Please review the PR and move to 'Ready for Plan' when approved."
+
+          node scripts/linear-helper.mjs add-comment \
+            "${{ matrix.ticket_id }}" \
+            "$COMMENT"
+
+      - name: Revert status on failure
+        if: failure()
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: |
+          node scripts/linear-helper.mjs update-status \
+            "${{ matrix.ticket_id }}" \
+            "Research Needed"
+
+          COMMENT="❌ Research workflow failed. Status reverted to 'Research Needed'.
+
+          Please check the GitHub Actions logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          node scripts/linear-helper.mjs add-comment \
+            "${{ matrix.ticket_id }}" \
+            "$COMMENT"

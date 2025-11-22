@@ -21,22 +21,22 @@ This command creates all the necessary files for GitHub Actions automation in yo
 
 3. **`.github/workflows/linear-research-tickets.yml`**
    - Automates research phase for Linear tickets
-   - Runs `/research` command on tickets in "Research Needed" status
+   - Runs `/humanlayer-clone:research` command on tickets in "Research Needed" status
    - Commits research documents and updates Linear tickets
 
 4. **`.github/workflows/linear-create-plan.yml`**
    - Automates planning phase
    - Creates implementation plans based on research
-   - Runs `/plan` command on tickets in "Ready for Plan" status
+   - Runs `/humanlayer-clone:plan` command on tickets in "Ready for Plan" status
 
 5. **`.github/workflows/linear-implement-plan.yml`**
    - Automates implementation phase
    - Executes plans and creates pull requests
-   - Runs `/implement` command on tickets in "Ready for Dev" status
+   - Runs `/humanlayer-clone:implement` command on tickets in "Ready for Dev" status
 
 ## Why This Command Exists
 
-When you install the humanlayer-clone plugin, you get the commands (`/research`, `/plan`, `/implement`) and agents, but:
+When you install the humanlayer-clone plugin, you get the commands (`/humanlayer-clone:research`, `/humanlayer-clone:plan`, `/humanlayer-clone:implement`) and agents, but:
 - GitHub Actions workflow files aren't included (not part of plugin structure)
 - `package.json` isn't included (plugins don't install npm dependencies)
 - `scripts/linear-helper.mjs` needs to be in your repository (not the plugin)
@@ -103,17 +103,24 @@ This installs the `@linear/sdk` package needed by the workflows.
 
 ### 2. Setup Linear Workspace
 
-If you haven't already, create the required Linear workflow states:
+The workflows expect these Linear statuses to exist:
+- "Research Needed"
+- "Research in Progress"
+- "Research in Review"
+- "Ready for Plan"
+- "Plan in Progress"
+- "Plan in Review"
+- "Ready for Dev"
+- "In Dev"
+- "Code Review"
 
+If you need to create these statuses, you can use:
 ```bash
 export LINEAR_API_KEY=your_linear_api_key
 node scripts/linear-helper.mjs setup-workflow
 ```
 
-Or run:
-```bash
-/setup-linear
-```
+Or run the `/setup-linear` command if available.
 
 ### 3. Configure GitHub Secrets
 
@@ -128,19 +135,26 @@ Add these secrets:
 
 **Note:** `GITHUB_TOKEN` is automatically provided by GitHub Actions.
 
-### 4. Create "LinearLayer (Claude)" Bot User
+### 4. Setup Linear Assignee
 
-In Linear:
-- Go to Settings → Members
+The workflows filter tickets by assignee. You can either:
+
+**Option A: Use your personal account**
+- The workflows are currently configured to use "Yanhong Zhao"
+- Update the assignee in the workflow files to match your Linear username
+
+**Option B: Create a bot user** (recommended for teams)
+- Go to Linear Settings → Members
 - Invite a new member: `linearbot@yourdomain.com`
 - Set display name to "LinearLayer (Claude)"
 - Assign to your team
+- Update the workflow files to use this bot name as the assignee
 
 ### 5. Test the Workflows
 
 **Create a test ticket:**
 1. Create new issue in Linear
-2. Assign to "LinearLayer (Claude)"
+2. Assign to the user configured in your workflows (default: "Yanhong Zhao")
 3. Set status to "Research Needed"
 
 **Run the research workflow:**
@@ -163,10 +177,10 @@ Your GitHub Actions will follow this automation flow:
 │  linear-research-tickets.yml       │
 ├─────────────────────────────────────┤
 │ 1. Fetch tickets (Research Needed)  │
-│ 2. Update → Research In Progress    │
-│ 3. Run /research command             │
+│ 2. Update → Research in Progress    │
+│ 3. Run /humanlayer-clone:research    │
 │ 4. Commit to thoughts/               │
-│ 5. Update → Research In Review       │
+│ 5. Update → Research in Review       │
 │ 6. Add comment with link             │
 └─────────────────────────────────────┘
               ↓
@@ -176,11 +190,11 @@ Your GitHub Actions will follow this automation flow:
 │  linear-create-plan.yml             │
 ├─────────────────────────────────────┤
 │ 1. Fetch tickets (Ready for Plan)   │
-│ 2. Update → Plan In Progress         │
+│ 2. Update → Plan in Progress         │
 │ 3. Locate research document          │
-│ 4. Run /plan command                 │
+│ 4. Run /humanlayer-clone:plan        │
 │ 5. Commit to thoughts/               │
-│ 6. Update → Plan In Review           │
+│ 6. Update → Plan in Review           │
 │ 7. Add comment with link             │
 └─────────────────────────────────────┘
               ↓
@@ -193,7 +207,7 @@ Your GitHub Actions will follow this automation flow:
 │ 2. Create/checkout git branch        │
 │ 3. Update → In Dev                   │
 │ 4. Locate plan document              │
-│ 5. Run /implement command            │
+│ 5. Run /humanlayer-clone:implement   │
 │ 6. Commit implementation             │
 │ 7. Create pull request               │
 │ 8. Link PR to Linear                 │
@@ -205,23 +219,32 @@ Your GitHub Actions will follow this automation flow:
 
 The generated workflows can be customized for your needs:
 
-### Change the Bot Name
+### Change the Assignee Name
 
-Edit the workflow files and replace `"LinearLayer (Claude)"` with your bot's name:
+The workflows currently use `"Yanhong Zhao"` as the assignee. To use a different assignee (like a bot account), edit the workflow files and update:
 
 ```yaml
 --assignee "Your Bot Name"
 ```
 
+For example, to use a bot account named "LinearLayer (Claude)":
+
+```yaml
+--assignee "LinearLayer (Claude)"
+```
+
 ### Update Status Names
 
-If your Linear workspace uses different status names, update them:
+If your Linear workspace uses different status names, update them in the workflow files:
 
 ```yaml
 --status "Your Custom Status Name"
 ```
 
-**Important:** Status names are case-sensitive and must match exactly.
+**Important:** Status names are case-sensitive and must match exactly. The workflows use:
+- Research: "Research Needed" → "Research in Progress" → "Research in Review" → "Ready for Plan"
+- Planning: "Ready for Plan" → "Plan in Progress" → "Plan in Review" → "Ready for Dev"
+- Implementation: "Ready for Dev" → "In Dev" → "Code Review"
 
 ### Change Base Branch
 
@@ -301,11 +324,11 @@ git push origin main
 **Cause:** No tickets match the filters.
 
 **Fix:**
-1. Verify tickets are assigned to "LinearLayer (Claude)"
-2. Check status names match exactly (case-sensitive)
+1. Verify tickets are assigned to the correct user (check assignee in workflow files)
+2. Check status names match exactly (case-sensitive: "Research in Review" not "Research In Review")
 3. Test query locally:
    ```bash
-   node scripts/linear-helper.mjs list-issues --status "Research Needed" --assignee "LinearLayer (Claude)"
+   node scripts/linear-helper.mjs list-issues --status "Research Needed" --assignee "Your Assignee Name"
    ```
 
 ### "Research document not found"
@@ -322,12 +345,66 @@ git push origin main
 **Cause:** Claude Code CLI not installed in GitHub Actions runner.
 
 **Fix:**
-You may need to:
-1. Install Claude Code in the workflow
-2. Use Claude API directly instead of CLI
-3. Run on self-hosted runner with Claude Code installed
+The workflows install Claude Code CLI automatically:
+```bash
+npm install -g @anthropic-ai/claude-code
+```
 
-See workflow files for the "Setup Claude Code" step.
+They also configure it with the required API settings in the "Setup Claude Code" step. Make sure your `Z_AI_API_KEY` secret is properly configured if you're using a custom API endpoint.
+
+## How the Workflows Execute Commands
+
+The workflows run Claude Code commands with the `--permission-mode acceptEdits` flag to automatically accept file changes in CI:
+
+```bash
+echo "$PROMPT" | claude /humanlayer-clone:research --permission-mode acceptEdits
+echo "$PROMPT" | claude /humanlayer-clone:plan --permission-mode acceptEdits
+echo "$PROMPT" | claude /humanlayer-clone:implement --permission-mode acceptEdits
+```
+
+This allows the workflows to run fully automated without requiring manual approval of edits.
+
+## Linear Helper Commands
+
+The workflows use `scripts/linear-helper.mjs` to interact with Linear. Here are the commands used:
+
+### List Issues
+```bash
+node scripts/linear-helper.mjs list-issues \
+  --status "Research Needed" \
+  --assignee "Yanhong Zhao" \
+  --limit "10"
+```
+Returns JSON array of issues matching the filters.
+
+### Get Issue Details
+```bash
+# Text format for prompts
+node scripts/linear-helper.mjs get-issue <ISSUE_ID> --output text
+
+# JSON format for parsing
+node scripts/linear-helper.mjs get-issue <ISSUE_ID> --output json
+```
+
+### Update Issue Status
+```bash
+node scripts/linear-helper.mjs update-status <ISSUE_ID> "New Status"
+```
+
+### Add Link to Issue
+```bash
+node scripts/linear-helper.mjs add-link <ISSUE_ID> <URL> --title "Link Title"
+```
+
+### Add Comment
+```bash
+node scripts/linear-helper.mjs add-comment <ISSUE_ID> "Comment text"
+```
+
+### Download Images
+```bash
+node scripts/linear-helper.mjs download-images <ISSUE_ID> --output-dir thoughts/shared/images
+```
 
 ## Monitoring
 
@@ -371,7 +448,7 @@ After setting up GitHub Actions:
 
 - **Main Documentation:** README.md → Linear Automation section
 - **Linear CLI:** `node scripts/linear-helper.mjs --help`
-- **Plugin Commands:** `/research`, `/plan`, `/implement`
+- **Plugin Commands:** `/humanlayer-clone:research`, `/humanlayer-clone:plan`, `/humanlayer-clone:implement`
 
 ---
 
