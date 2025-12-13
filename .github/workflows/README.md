@@ -59,7 +59,7 @@ Add the following secrets to your repository:
 
 **Required for Claude Code:**
 - `Z_AI_API_KEY` - Z.ai API key to run Claude Code commands
-  - Used to run /research, /plan, /implement commands
+  - Used to run /humanlayer-clone:research, /humanlayer-clone:plan, /humanlayer-clone:implement commands
   - Get from: https://z.ai/
   - I am trying to save money here but equally it will be easy to use the official Claude API if needed.
 
@@ -104,7 +104,7 @@ gh workflow run linear-research-tickets.yml -f num_tickets=5
    - Update Linear status → "research in progress"
    - Fetch ticket details (title, description, comments)
    - Download any images → `thoughts/shared/images/`
-   - Run `/research` command with ticket context
+   - Run `/humanlayer-clone:research` command with ticket context
    - Expected output: `thoughts/shared/research/YYYY-MM-DD-[TICKET-ID]-*.md`
    - Commit research document to repository
    - On success: Update status → "research in review"
@@ -141,7 +141,7 @@ gh workflow run linear-create-plan.yml -f num_tickets=3
    - Fetch ticket details
    - **Locate research document** → `thoughts/shared/research/*[TICKET-ID]*.md`
    - Fail if research not found (run research workflow first)
-   - Run `/plan` command with ticket + research document
+   - Run `/humanlayer-clone:plan` command with ticket + research document
    - Expected output: `thoughts/shared/plans/YYYY-MM-DD-[TICKET-ID]-*.md`
    - Commit plan document to repository
    - On success: Update status → "plan in review"
@@ -183,7 +183,7 @@ gh workflow run linear-implement-plan.yml -f num_tickets=2
    - Update Linear status → "in dev"
    - **Locate plan document** → `thoughts/shared/plans/*[TICKET-ID]*.md`
    - Fail if plan not found (run plan workflow first)
-   - Run `/implement` command with plan
+   - Run `/humanlayer-clone:implement` command with plan
    - Commit implementation changes to branch
    - Push branch to origin
    - Create Pull Request via `gh pr create`
@@ -424,7 +424,7 @@ These require human review and are not automated by design.
 ## Support
 
 For issues with:
-- **Plugin commands** (`/research`, `/plan`, `/implement`) - see main README.md
+- **Plugin commands** (`/humanlayer-clone:research`, `/humanlayer-clone:plan`, `/humanlayer-clone:implement`) - see main README.md
 - **Linear API** - check Linear API documentation
 - **GitHub Actions** - check workflow logs and GitHub Actions documentation
 - **Workflow customization** - open issue in repository

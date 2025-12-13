@@ -50,7 +50,7 @@ This creates the `thoughts/` directory structure where research and plans are st
 ### 1. Research Phase
 
 ```bash
-/research "How does authentication work in this codebase?"
+/humanlayer-clone:research "How does authentication work in this codebase?"
 ```
 
 Output: `thoughts/shared/research/2025-01-04-auth-research.md`
@@ -58,7 +58,7 @@ Output: `thoughts/shared/research/2025-01-04-auth-research.md`
 ### 2. Planning Phase
 
 ```bash
-/plan thoughts/shared/research/2025-01-04-auth-research.md
+/humanlayer-clone:plan thoughts/shared/research/2025-01-04-auth-research.md
 ```
 
 Output: `thoughts/shared/plans/2025-01-04-auth-plan.md`
@@ -66,7 +66,7 @@ Output: `thoughts/shared/plans/2025-01-04-auth-plan.md`
 ### 3. Implementation Phase
 
 ```bash
-/implement thoughts/shared/plans/2025-01-04-auth-plan.md
+/humanlayer-clone:implement thoughts/shared/plans/2025-01-04-auth-plan.md
 ```
 
 Executes phase-by-phase with verification pauses.
@@ -114,8 +114,8 @@ node scripts/linear-helper.mjs setup-workflow
 ```
 
 **States Created:**
-- Research: Research Needed, Research In Progress, Research In Review
-- Planning: Ready for Plan, Plan In Progress, Plan In Review
+- Research: Research Needed, Research in Progress, Research in Review
+- Planning: Ready for Plan, Plan in Progress, Plan in Review
 - Implementation: Ready for Dev, In Dev, Code Review
 
 ### `/setup-github-actions`
@@ -149,7 +149,7 @@ node scripts/setup-github-actions.mjs
 3. Configure GitHub Secrets (LINEAR_API_KEY, ANTHROPIC_API_KEY)
 4. Test with: `gh workflow run linear-research-tickets.yml -f num_tickets=1`
 
-### `/research`
+### `/humanlayer-clone:research`
 
 Deep codebase research using 6 parallel sub-agents.
 
@@ -161,7 +161,7 @@ Deep codebase research using 6 parallel sub-agents.
 
 **Output:** `thoughts/shared/research/YYYY-MM-DD-description.md`
 
-### `/plan`
+### `/humanlayer-clone:plan`
 
 Interactive implementation planning.
 
@@ -173,7 +173,7 @@ Interactive implementation planning.
 
 **Output:** `thoughts/shared/plans/YYYY-MM-DD-description.md`
 
-### `/implement`
+### `/humanlayer-clone:implement`
 
 Phase-based implementation with verification gates.
 
@@ -232,14 +232,14 @@ Performs external research when explicitly requested.
 /setup
 
 # Start with research
-/research "How do we handle user permissions?"
+/humanlayer-clone:research "How do we handle user permissions?"
 
 # Create a plan based on research
-/plan thoughts/shared/research/2025-01-04-permissions.md
+/humanlayer-clone:plan thoughts/shared/research/2025-01-04-permissions.md
 # (Plugin reads research AND runs fresh investigation)
 
 # Execute the plan
-/implement thoughts/shared/plans/2025-01-04-permissions-plan.md
+/humanlayer-clone:implement thoughts/shared/plans/2025-01-04-permissions-plan.md
 
 # Phase 1 completes...
 # Phase 1 Complete - Ready for Manual Verification
@@ -256,7 +256,7 @@ Performs external research when explicitly requested.
 # "Continue to Phase 2"
 
 # Update plan if needed
-/iterate-plan thoughts/shared/plans/2025-01-04-permissions-plan.md
+/humanlayer-clone:iterate-plan thoughts/shared/plans/2025-01-04-permissions-plan.md
 ```
 
 ## Linear Automation
@@ -313,7 +313,7 @@ This automatically:
    **Manual Alternative:**
    - Create "LinearLayer (Claude)" user/bot for automation
    - Configure workflow states matching your team's process
-   - Required states: `Research Needed`, `Research In Progress`, `Research In Review`, `Ready for Plan`, `Plan In Progress`, `Plan In Review`, `Ready for Dev`, `In Dev`, `Code Review`
+   - Required states: `Research Needed`, `Research in Progress`, `Research in Review`, `Ready for Plan`, `Plan in Progress`, `Plan in Review`, `Ready for Dev`, `In Dev`, `Code Review`
 
 2. **GitHub Repository Setup**
    - Install plugin: `npm install` (installs @linear/sdk)
@@ -342,7 +342,7 @@ Automates research phase for Linear tickets.
 1. Fetches tickets in "research needed" status assigned to "LinearLayer (Claude)"
 2. Updates ticket to "research in progress"
 3. Downloads any images from ticket to `thoughts/shared/images/`
-4. Runs `/research` command with ticket details
+4. Runs `/humanlayer-clone:research` command with ticket details
 5. Commits research document to repository
 6. Updates ticket to "research in review" (success) or "research needed" (failure)
 7. Adds comment to Linear with research link
@@ -363,7 +363,7 @@ Creates implementation plans for researched tickets.
 1. Fetches tickets in "ready for plan" status
 2. Updates ticket to "plan in progress"
 3. Locates prior research document for the ticket
-4. Runs `/plan` command with ticket + research context
+4. Runs `/humanlayer-clone:plan` command with ticket + research context
 5. Commits plan document to repository
 6. Updates ticket to "plan in review" (success) or "ready for plan" (failure)
 7. Adds comment with plan link
@@ -385,7 +385,7 @@ Implements approved plans and creates pull requests.
 2. Creates/checks out git branch from Linear ticket
 3. Updates ticket to "in dev"
 4. Locates plan document for the ticket
-5. Runs `/implement` command with plan
+5. Runs `/humanlayer-clone:implement` command with plan
 6. Commits implementation changes
 7. Creates pull request via `gh pr create`
 8. Adds PR link to Linear ticket
