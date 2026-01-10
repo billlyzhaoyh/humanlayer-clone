@@ -13,7 +13,5 @@
     "workflow",
     "agents",
     "documentation"
-  ],
-  "commands": "./commands/*.md",
-  "agents": "./agents/*.md"
+  ]
 }
