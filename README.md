@@ -20,9 +20,16 @@ This plugin replicates the powerful workflow from the HumanLayer repository, ena
 
 ## Installation
 
+### 1. Add the marketplace
+From within Claude Code, run the plugin marketplace add command for the humanlayer-clone marketplace:
 ```bash
-cd your-project
-claude plugin install https://github.com/billyzhaoyh/humanlayer-clone
+/plugin marketplace add https://github.com/billlyzhaoyh/humanlayer-clone.git
+```
+
+### 2. Install the plugin
+Then, run the plugin install command for the humanlayer-clone plugin:
+```bash
+/plugin install humanlayer-clone@humanlayer-clone
 ```
 
 ## Quick Start
